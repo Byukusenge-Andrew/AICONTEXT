@@ -24,64 +24,120 @@ class ConnectionGraph:
     def __init__(self, root_dir: Path):
         self.root_dir = root_dir
         self.nodes: Dict[str, GraphNode] = {}
+        self.module_map: Dict[str, str] = {}
 
     def build_graph(self, parse_results: Dict[str, FileParseResult]):
-        """Builds directed dependency graph from parse results."""
+        """Builds directed dependency graph from parse results with O(1) HashMap lookups."""
         self.nodes.clear()
+        self.module_map.clear()
 
-        # Step 1: Initialize nodes
+        # Step 1: Initialize nodes and populate O(1) module index map
         for rel_path, res in parse_results.items():
             node = GraphNode(rel_path, res.language)
             node.symbols = [s.name for s in res.symbols]
             self.nodes[rel_path] = node
 
-        # Step 2: Resolve edges
-        all_rel_paths = list(self.nodes.keys())
-        
+            posix_path = Path(rel_path).as_posix()
+            self.module_map[posix_path] = rel_path
+            base_name = Path(rel_path).stem
+            
+            # Map base_name if not already mapped or exact match
+            if base_name not in self.module_map:
+                self.module_map[base_name] = rel_path
+            
+            # Map python/JS dot notation (e.g., aicontext.tracker)
+            clean_mod = posix_path
+            for ext in [".py", ".js", ".ts", ".jsx", ".tsx"]:
+                if clean_mod.endswith(ext):
+                    clean_mod = clean_mod[:-len(ext)]
+                    break
+            dot_mod = clean_mod.replace("/", ".")
+            self.module_map[dot_mod] = rel_path
+
+        # Step 2: Resolve edges using O(1) HashMap lookups
         for rel_path, res in parse_results.items():
             source_node = self.nodes[rel_path]
             source_dir = Path(rel_path).parent
 
             for imp in res.imports:
-                target_path = self._resolve_import(imp, source_dir, all_rel_paths)
+                target_path = self._resolve_import(imp, source_dir)
                 if target_path and target_path in self.nodes and target_path != rel_path:
                     source_node.imports_files.add(target_path)
                     self.nodes[target_path].imported_by.add(rel_path)
 
-    def _resolve_import(self, import_str: str, source_dir: Path, all_paths: List[str]) -> Optional[str]:
-        """Resolves an import string (e.g., '.config', 'aicontext.tracker', './utils') to workspace rel_path."""
+    def _resolve_import(self, import_str: str, source_dir: Path, all_paths: Optional[List[str]] = None) -> Optional[str]:
+        """Resolves an import string (e.g., '.config', 'aicontext.tracker', './utils') using O(1) HashMap lookup."""
         import_clean = import_str.lstrip(".").replace(".", "/")
         
-        # Check direct matches or relative matches
-        candidates = [
+        candidates = []
+
+        if source_dir != Path(".") and source_dir != Path(""):
+            rel_candidate = (source_dir / import_clean).as_posix()
+            candidates.extend([
+                rel_candidate,
+                f"{rel_candidate}.py",
+                f"{rel_candidate}.js",
+                f"{rel_candidate}.ts",
+                f"{rel_candidate}/index.js",
+                f"{rel_candidate}/index.ts",
+                f"{rel_candidate}/__init__.py",
+            ])
+
+        candidates.extend([
+            import_clean,
             f"{import_clean}.py",
             f"{import_clean}.js",
             f"{import_clean}.ts",
             f"{import_clean}/index.js",
             f"{import_clean}/index.ts",
             f"{import_clean}/__init__.py",
-        ]
+            import_str,
+        ])
 
-        if source_dir != Path("."):
-            rel_candidate = (source_dir / import_clean).as_posix()
-            candidates.extend([
-                f"{rel_candidate}.py",
-                f"{rel_candidate}.js",
-                f"{rel_candidate}.ts",
-            ])
+        # O(1) dictionary lookups
+        for cand in candidates:
+            if cand in self.module_map:
+                return self.module_map[cand]
 
-        for path in all_paths:
-            # Check if candidate ends with path or matches path
-            for cand in candidates:
-                if path.endswith(cand) or cand.endswith(path):
-                    return path
-            
-            # Module name match (e.g. import "tracker" matches "aicontext/tracker.py")
-            base_name = Path(path).stem
-            if import_str == base_name or import_str.endswith(f".{base_name}"):
-                return path
+        # Base name fallback lookup
+        base = Path(import_clean).name
+        if base in self.module_map:
+            return self.module_map[base]
 
         return None
+
+    def get_neighborhood(self, target_files: List[str], max_depth: int = 2) -> Dict[str, List[str]]:
+        """
+        Computes N-hop neighborhood (both upstream dependents and downstream dependencies)
+        for a set of target files up to max_depth.
+        Returns:
+            dict mapping target_file -> list of connected files within max_depth
+        """
+        neighborhood_map = {}
+        for target in target_files:
+            if target not in self.nodes:
+                continue
+            
+            connected = set()
+            queue = [(target, 0)]
+            visited = {target}
+
+            while queue:
+                curr_file, depth = queue.pop(0)
+                if depth > 0:
+                    connected.add(curr_file)
+
+                if depth < max_depth:
+                    node = self.nodes.get(curr_file)
+                    if node:
+                        neighbors = node.imported_by | node.imports_files
+                        for nxt in neighbors:
+                            if nxt not in visited:
+                                visited.add(nxt)
+                                queue.append((nxt, depth + 1))
+
+            neighborhood_map[target] = sorted(list(connected))
+        return neighborhood_map
 
     def get_impact_radius(self, modified_files: List[str], max_depth: int = 2) -> Dict[str, List[str]]:
         """

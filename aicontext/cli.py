@@ -185,6 +185,26 @@ def watch(path: str, interval: float):
 
 @cli.command()
 @click.option("--path", "-p", default=".", help="Root directory of codebase.")
+@click.option("--file", "-f", "target_file", required=True, help="Target file relative path to query context for.")
+@click.option("--radius", "-r", default=2, type=int, help="Neighborhood radius depth R.")
+@click.option("--tier", "-t", default=2, type=int, help="Context detail tier (1=Global, 2=Neighborhood, 3=Focus).")
+def query(path: str, target_file: str, radius: int, tier: int):
+    """Queries N-hop neighborhood context payload for specific file(s)."""
+    config = Config(path)
+    tracker = ChangeTracker(config)
+    extractor = SymbolExtractor()
+    current_cache, _, _, _ = tracker.scan_files()
+    parse_results = {rel: extractor.parse_file(config.root_dir / rel, rel) for rel in current_cache}
+    
+    conn_graph = ConnectionGraph(config.root_dir)
+    conn_graph.build_graph(parse_results)
+    
+    generator = ContextGenerator(config)
+    payload = generator.generate_tiered_context([target_file], conn_graph, parse_results, radius=radius, tier=tier)
+    console.print(payload)
+
+@cli.command()
+@click.option("--path", "-p", default=".", help="Root directory of codebase.")
 def mcp(path: str):
     """Launches Model Context Protocol (MCP) server for IDE integration (Antigravity, Cursor, Claude)."""
     try:

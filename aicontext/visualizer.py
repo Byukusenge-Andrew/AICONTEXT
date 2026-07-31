@@ -12,11 +12,13 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AIContext - Visual Codebase Explorer & Connection Graph</title>
+    <title>AIContext - Visual Codebase Explorer & 3D Connection Graph</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+    <script src="https://unpkg.com/3d-force-graph@1.73.0/dist/3d-force-graph.min.js"></script>
     <style>
         :root {
             --bg-dark: #0f172a;
@@ -169,7 +171,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             margin-bottom: 16px;
             display: flex;
             align-items: center;
-            gap: 10px;
+            justify-content: space-between;
         }
 
         /* Mermaid Graph Viewer */
@@ -182,6 +184,16 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             display: flex;
             justify-content: center;
             min-height: 500px;
+        }
+
+        /* 3D WebGL Graph */
+        #graph3d-container {
+            height: 650px;
+            background: #060911;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            position: relative;
+            overflow: hidden;
         }
 
         /* File Symbols Tree */
@@ -207,19 +219,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         .tag-class { background: rgba(139, 92, 246, 0.2); color: #a78bfa; }
         .tag-function { background: rgba(6, 182, 212, 0.2); color: #38bdf8; }
         .tag-method { background: rgba(16, 185, 129, 0.2); color: #34d399; }
-
-        /* Changes list */
-        .change-pill {
-            display: inline-block;
-            padding: 4px 10px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
-            margin-right: 8px;
-        }
-        .pill-added { background: rgba(16, 185, 129, 0.2); color: var(--accent-green); }
-        .pill-modified { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
-        .pill-deleted { background: rgba(244, 63, 94, 0.2); color: var(--accent-rose); }
     </style>
 </head>
 <body>
@@ -232,13 +231,16 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             </div>
         </div>
         <div class="nav-menu">
-            <button class="nav-btn active" onclick="switchTab('graph')">
-                🌐 Dependency Graph
+            <button class="nav-btn active" onclick="switchTab('3dgraph', this)">
+                🪐 3D Code Globe
             </button>
-            <button class="nav-btn" onclick="switchTab('symbols')">
+            <button class="nav-btn" onclick="switchTab('graph', this)">
+                🌐 2D Diagram Graph
+            </button>
+            <button class="nav-btn" onclick="switchTab('symbols', this)">
                 🧩 Codebase & Symbols
             </button>
-            <button class="nav-btn" onclick="switchTab('changes')">
+            <button class="nav-btn" onclick="switchTab('changes', this)">
                 ⚡ Changes & Impact
             </button>
         </div>
@@ -251,14 +253,25 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
     <div class="main-container">
         <div class="topbar">
-            <div class="topbar-title" id="tab-title">Dependency Graph</div>
+            <div class="topbar-title" id="tab-title">3D Code Globe</div>
             <input type="text" class="search-input" id="search-box" placeholder="Search symbols or files..." onkeyup="filterContent()">
         </div>
         <div class="content-body">
-            <!-- Graph Tab -->
-            <div id="tab-graph" class="tab-pane active">
+            <!-- 3D Graph Tab -->
+            <div id="tab-3dgraph" class="tab-pane active">
+                <div class="card" style="padding:16px;">
+                    <div class="card-header">
+                        <span>🪐 3D WebGL Code Globe & Dependency Network</span>
+                        <span style="font-size:12px;color:var(--text-muted);font-weight:400;">Drag to rotate • Scroll to zoom • Glowing particle flow indicates dependency directions</span>
+                    </div>
+                    <div id="graph3d-container"></div>
+                </div>
+            </div>
+
+            <!-- 2D Mermaid Graph Tab -->
+            <div id="tab-graph" class="tab-pane">
                 <div class="card">
-                    <div class="card-header">Codebase Architecture & Dependency Connections</div>
+                    <div class="card-header">2D Dependency Architecture</div>
                     <div class="graph-container">
                         <pre class="mermaid" id="mermaid-graph"></pre>
                     </div>
@@ -282,17 +295,21 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
     <script>
         let DATA = __DATA_JSON__;
+        let graph3dInstance = null;
 
         mermaid.initialize({ startOnLoad: false, theme: 'dark' });
 
         function init() {
-            // Render Graph
-            document.getElementById('mermaid-graph').textContent = DATA.mermaid;
-            mermaid.run({ nodes: [document.getElementById('mermaid-graph')] });
-
             // Render Stats
             document.getElementById('stat-files').textContent = DATA.filesCount;
             document.getElementById('stat-symbols').textContent = DATA.symbolsCount;
+
+            // Render 3D Graph
+            init3DGraph();
+
+            // Render 2D Mermaid Graph
+            document.getElementById('mermaid-graph').textContent = DATA.mermaid;
+            mermaid.run({ nodes: [document.getElementById('mermaid-graph')] });
 
             // Render Symbols
             const symContainer = document.getElementById('symbols-container');
@@ -327,15 +344,42 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             chgContainer.innerHTML = DATA.changesHtml;
         }
 
-        function switchTab(tab) {
-            document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
+        function init3DGraph() {
+            const elem = document.getElementById('graph3d-container');
+            if (!elem || graph3dInstance || !DATA.graph3d) return;
+
+            graph3dInstance = ForceGraph3D()
+                (elem)
+                .graphData(DATA.graph3d)
+                .nodeLabel('name')
+                .nodeAutoColorBy('group')
+                .nodeRelSize(7)
+                .linkOpacity(0.4)
+                .linkDirectionalParticles(3)
+                .linkDirectionalParticleSpeed(0.006)
+                .width(elem.clientWidth)
+                .height(650);
+        }
+
+        function switchTab(tab, btn) {
+            document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
             document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
             
-            event.target.classList.add('active');
+            btn.classList.add('active');
             document.getElementById('tab-' + tab).classList.add('active');
             
-            const titles = { 'graph': 'Dependency Graph', 'symbols': 'Codebase & Symbols', 'changes': 'Recent Changes & Impact' };
+            const titles = { 
+                '3dgraph': '3D Code Globe', 
+                'graph': '2D Diagram Graph', 
+                'symbols': 'Codebase & Symbols', 
+                'changes': 'Recent Changes & Impact' 
+            };
             document.getElementById('tab-title').textContent = titles[tab];
+
+            if (tab === '3dgraph' && graph3dInstance) {
+                const elem = document.getElementById('graph3d-container');
+                graph3dInstance.width(elem.clientWidth);
+            }
         }
 
         function filterContent() {
@@ -363,11 +407,36 @@ class Visualizer:
         for path, res in parse_results.items():
             symbols_data[path] = res.to_dict()
 
+        # Build 3D Graph Data (nodes & links)
+        nodes_3d = []
+        links_3d = []
+
+        for path in sorted(current_cache.keys()):
+            parent_dir = Path(path).parent.as_posix()
+            if parent_dir == ".":
+                parent_dir = "root"
+            nodes_3d.append({"id": path, "name": path, "group": parent_dir})
+
+        # Build edges from parse_results or mermaid data
+        from .graph import ConnectionGraph
+        temp_graph = ConnectionGraph(self.config.root_dir)
+        temp_graph.build_graph(parse_results)
+
+        for source_path, node in temp_graph.nodes.items():
+            for target_path in node.imports_files:
+                links_3d.append({"source": source_path, "target": target_path})
+
+        graph_3d_data = {
+            "nodes": nodes_3d,
+            "links": links_3d
+        }
+
         # Format changes html
         changes_html = f"<pre style='font-family:inherit;line-height:1.6;'>{changes_md}</pre>"
 
         data = {
             "mermaid": graph_mermaid,
+            "graph3d": graph_3d_data,
             "filesCount": len(current_cache),
             "symbolsCount": symbols_count,
             "symbols": symbols_data,

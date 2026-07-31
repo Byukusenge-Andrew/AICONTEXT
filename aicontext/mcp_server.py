@@ -95,6 +95,13 @@ def create_mcp_server(root_dir: str = "."):
         return json.dumps(matches[:30], indent=2)
 
     @mcp.tool()
+    def get_neighborhood_context(target_files: List[str], radius: int = 2, tier: int = 2) -> str:
+        """Returns N-hop neighborhood context payload (Radius R, Tier 1..3) for target files."""
+        cfg, current_cache, parse_results, graph = _sync()
+        generator = ContextGenerator(config)
+        return generator.generate_tiered_context(target_files, graph, parse_results, radius=radius, tier=tier)
+
+    @mcp.tool()
     def sync_context() -> str:
         """Forces an immediate incremental re-indexing of the workspace context and dependency graph."""
         _sync()

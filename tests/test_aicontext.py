@@ -114,7 +114,7 @@ def test_visualizer_dashboard_generation(tmp_path):
     assert html_file.exists()
     content = html_file.read_text(encoding="utf-8")
     assert "AIContext" in content
-    assert "Dependency Graph" in content
+    assert "3D Code Globe" in content
 
 def test_rule_injector(tmp_path):
     config = Config(tmp_path)
@@ -142,3 +142,37 @@ def test_git_hook_installer(tmp_path):
     assert (git_dir / "hooks" / "post-commit").exists()
     assert (git_dir / "hooks" / "post-checkout").exists()
     assert (git_dir / "hooks" / "pre-commit").exists()
+
+def test_hashmap_lookup_and_neighborhood(tmp_path):
+    config = Config(tmp_path)
+    
+    utils_file = tmp_path / "utils.py"
+    utils_file.write_text("def helper(): pass\n", encoding="utf-8")
+
+    main_file = tmp_path / "main.py"
+    main_file.write_text("import utils\ndef run(): utils.helper()\n", encoding="utf-8")
+
+    tracker = ChangeTracker(config)
+    extractor = SymbolExtractor()
+
+    cache, _, _, _ = tracker.scan_files()
+    parse_results = {rel: extractor.parse_file(tmp_path / rel, rel) for rel in cache}
+
+    graph = ConnectionGraph(tmp_path)
+    graph.build_graph(parse_results)
+
+    # Check HashMap module indexing
+    assert "utils" in graph.module_map
+    assert graph.module_map["utils"] == "utils.py"
+
+    # Check N-hop neighborhood (both directions)
+    neighborhood = graph.get_neighborhood(["main.py"], max_depth=1)
+    assert "utils.py" in neighborhood["main.py"]
+
+    # Check Tiered Context Generation
+    generator = ContextGenerator(config)
+    payload = generator.generate_tiered_context(["main.py"], graph, parse_results, radius=1, tier=2)
+    assert "main.py" in payload
+    assert "utils.py" in payload
+    assert "[TARGET]" in payload
+

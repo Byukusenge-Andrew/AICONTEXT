@@ -55,6 +55,54 @@ class ContextGenerator:
         with open(self.prompt_file, "w", encoding="utf-8") as f:
             f.write(bootstrap_prompt)
 
+    def generate_tiered_context(
+        self,
+        target_files: List[str],
+        graph: ConnectionGraph,
+        parse_results: Dict[str, FileParseResult],
+        radius: int = 2,
+        tier: int = 2,
+    ) -> str:
+        """Generates scoped, tiered context payload for AI assistants."""
+        if tier == 1:
+            if self.config.summary_file.exists():
+                return self.config.summary_file.read_text(encoding="utf-8")
+            return self._build_summary_md({}, parse_results, graph)
+        
+        neighborhood = graph.get_neighborhood(target_files, max_depth=radius)
+        scoped_files = set(target_files)
+        for target, deps in neighborhood.items():
+            scoped_files.update(deps)
+
+        lines = [
+            f"# AIContext Tiered Payload (Tier {tier}, Radius={radius})",
+            f"> Target files: {', '.join([f'`{f}`' for f in target_files])}",
+            "",
+            "## Scoped Neighborhood Files",
+        ]
+
+        for rel_path in sorted(scoped_files):
+            res = parse_results.get(rel_path)
+            lang = res.language if res else "file"
+            is_target = rel_path in target_files
+            tag = " [TARGET]" if is_target else " [NEIGHBOR]"
+            
+            lines.append(f"### `{rel_path}` ({lang}){tag}")
+            if res and res.symbols:
+                lines.append("**Symbols:**")
+                sym_limit = None if (tier == 3 and is_target) else 10
+                sym_list = res.symbols if sym_limit is None else res.symbols[:sym_limit]
+                for sym in sym_list:
+                    det = f" {sym.details}" if sym.details else ""
+                    doc = f" - *{sym.docstring}*" if sym.docstring else ""
+                    lines.append(f"- `{sym.kind}` **{sym.name}** (L{sym.line_no}){det}{doc}")
+            
+            if res and res.imports:
+                lines.append(f"**Imports:** {', '.join([f'`{imp}`' for imp in res.imports])}")
+            lines.append("")
+
+        return "\n".join(lines)
+
     def _build_bootstrap_prompt(self, summary_md: str, changes_md: str) -> str:
         return f"""<AICONTEXT_PERSISTENT_CONTEXT>
 The following is an ultra-compact, token-optimized context index and recent change log for this project.
