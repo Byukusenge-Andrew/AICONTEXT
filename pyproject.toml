@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aicontext-engine"  # Using aicontext-engine (or custom name on PyPI)
+version = "0.1.0"
+description = "Persistent codebase context caching, change tracking, and connection graph engine for AI coding tools."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "click>=8.0.0",
+    "rich>=13.0.0",
+    "pathspec>=0.11.0",
+    "mcp>=1.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/yourusername/aicontext"
+Repository = "https://github.com/yourusername/aicontext"
+
+[project.scripts]
+aicontext = "aicontext.cli:cli"
+
+[tool.setuptools.packages.find]
+where = ["."]
