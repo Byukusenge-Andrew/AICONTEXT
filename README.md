@@ -14,8 +14,9 @@ It eliminates the overhead of LLMs re-reading entire codebases on every turn by 
   * **Tier 1 (Global)**: High-level module index & architectural summary (`SUMMARY.md`).
   * **Tier 2 (Neighborhood)**: $R$-hop dependency graph radius around target/modified files.
   * **Tier 3 (Focus)**: Line-level AST symbol signatures and docstrings for targeted files.
+* **$\mathcal{O}(1)$ HashMap Import Resolution**: Instant module lookup dictionary mapping imports to workspace files.
 * **Incremental SHA-256 Caching**: Parses only modified/added files, keeping context sync fast ($\sim 0$ LLM tokens burned).
-* **Interactive 3D Browser Dashboard**: Renders project dependency graphs in a 3D WebGL network visualizer.
+* **Interactive 3D Browser Dashboard**: Renders project dependency graphs in a 3D WebGL Code Globe network visualizer.
 
 > 📖 Read the detailed technical specification: [SPATIAL_AICONTEXT_SPEC.md](file:///d:/mytools/AICONTEXT/SPATIAL_AICONTEXT_SPEC.md)
 
@@ -32,7 +33,7 @@ Run the global installer script (Windows):
 ```cmd
 install_global.bat
 ```
-*(Or manually install via pip: `pip install -e .`)*
+*(Automatically configures pip installation and updates your User PATH).*
 
 ### Step 2: Use in ANY Project
 
@@ -42,6 +43,8 @@ Open **ANY project directory** in your terminal or IDE, and simply type:
 # In your project folder:
 aicontext init
 ```
+
+*(Note: If `aicontext` command is not recognized in an active terminal before restarting, use `py -m aicontext.cli init`)*
 
 That's it! `aicontext` automatically creates `.aicontext/` in that project directory and injects context rules into `AGENTS.md`.
 
@@ -76,7 +79,12 @@ Add this single configuration to your global MCP settings (`mcpServers`):
   aicontext init
   ```
 
-- **Open Interactive Browser Visualizer**:
+- **Query Scoped $N$-Hop Neighborhood Context**:
+  ```bash
+  aicontext query --file <relative_path> --radius 2 --tier 2
+  ```
+
+- **Open Interactive 3D WebGL Browser Visualizer**:
   ```bash
   aicontext visualize
   ```
@@ -98,5 +106,5 @@ Add this single configuration to your global MCP settings (`mcpServers`):
 - `.aicontext/SUMMARY.md`: Token-optimized codebase index, symbols, and imports map.
 - `.aicontext/recent_changes.md`: Delta summary of added/modified files and impact radius analysis.
 - `.aicontext/graph.mmd`: Dependency connection graph in Mermaid format.
-- `.aicontext/index.html`: Interactive 3D WebGL dashboard.
+- `.aicontext/index.html`: Interactive 3D WebGL Code Globe dashboard.
 - `.aicontext/prompt.txt`: Copy-pasteable session bootstrap prompt for new AI chats.
