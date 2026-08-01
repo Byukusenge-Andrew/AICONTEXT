@@ -106,6 +106,20 @@ Add this single configuration to your global MCP settings (`mcpServers`):
 
 ---
 
+## ⚙️ Per-Project Custom Configuration (`.aicontext.json`)
+
+To customize security, sensitive files, or extra ignore files for a specific repository, create a `.aicontext.json` file in your project root:
+
+```json
+{
+  "sensitive_patterns": ["custom_secret.txt", "config/keys/*"],
+  "ignore_targets": [".customignore", ".dockerignore"],
+  "custom_ignore_patterns": ["build/", "temp_logs/"]
+}
+```
+
+---
+
 ## 📁 Artifacts Generated in `.aicontext/`
 
 - `.aicontext/SUMMARY.md`: Token-optimized codebase index, symbols, and imports map.

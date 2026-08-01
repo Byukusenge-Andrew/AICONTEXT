@@ -176,3 +176,71 @@ def test_hashmap_lookup_and_neighborhood(tmp_path):
     assert "utils.py" in payload
     assert "[TARGET]" in payload
 
+def test_security_guard_and_anti_leakage(tmp_path):
+    from aicontext.security import SecurityGuard
+
+    # 1. Test multi-target ignore auto-injection (.gitignore, .dockerignore, etc.)
+    docker_ignore = tmp_path / ".dockerignore"
+    docker_ignore.write_text("node_modules/\n", encoding="utf-8")
+
+    updated = SecurityGuard.ensure_all_ignores_updated(tmp_path)
+    assert ".gitignore" in updated
+    assert ".dockerignore" in updated
+
+    git_content = (tmp_path / ".gitignore").read_text(encoding="utf-8")
+    docker_content = (tmp_path / ".dockerignore").read_text(encoding="utf-8")
+    assert ".aicontext/" in git_content
+    assert ".aicontext/" in docker_content
+
+    # 2. Test sensitive file filter
+    assert SecurityGuard.is_sensitive_file(".env")
+    assert SecurityGuard.is_sensitive_file(".env.local")
+    assert SecurityGuard.is_sensitive_file("server.key")
+    assert SecurityGuard.is_sensitive_file("credentials.json")
+    assert not SecurityGuard.is_sensitive_file("main.py")
+
+    # 3. Test secret redaction
+    raw_doc = "Connect using sk-proj-1234567890abcdef1234567890 and postgres://user:pass@localhost/db"
+    redacted = SecurityGuard.redact_secrets(raw_doc)
+    assert "sk-proj" not in redacted
+    assert "[REDACTED_OPENAI_KEY]" in redacted
+    assert "[REDACTED_CONNECTION_STRING]" in redacted
+
+    # 4. Test identifier obfuscation
+    obs_path = SecurityGuard.obfuscate_identifier("aicontext/tracker.py")
+    assert obs_path.startswith("obs_")
+    assert len(obs_path) == 16
+
+    # 5. Test zero-trace workspace purge
+    (tmp_path / ".aicontext").mkdir(exist_ok=True)
+    (tmp_path / "AGENTS.md").write_text("Token Preservation Rule\naicontext sync\nCustom User Content\n", encoding="utf-8")
+    purged = SecurityGuard.purge_all(tmp_path)
+    assert ".aicontext/" in purged
+    assert "AGENTS.md" in purged
+def test_project_custom_config(tmp_path):
+    # Create .aicontext.json with custom sensitive patterns and custom ignore targets
+    custom_cfg = tmp_path / ".aicontext.json"
+    custom_cfg.write_text(json.dumps({
+        "sensitive_patterns": ["custom_secret.txt"],
+        "ignore_targets": [".customignore"],
+        "custom_ignore_patterns": ["custom_build/"]
+    }), encoding="utf-8")
+
+    config = Config(tmp_path)
+    config.ensure_dir()
+
+    assert "custom_secret.txt" in config.custom_sensitive_patterns
+    assert ".customignore" in config.custom_ignore_targets
+    assert "custom_build/" in config.ignore_patterns
+
+    # Verify custom sensitive file check
+    from aicontext.security import SecurityGuard
+    assert SecurityGuard.is_sensitive_file("custom_secret.txt", custom_patterns=config.custom_sensitive_patterns)
+
+    # Verify custom ignore target auto-protection
+    assert (tmp_path / ".customignore").exists()
+    assert ".aicontext/" in (tmp_path / ".customignore").read_text(encoding="utf-8")
+
+
+
+

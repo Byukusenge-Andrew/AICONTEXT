@@ -45,12 +45,13 @@ def init(path: str):
 
 @cli.command()
 @click.option("--path", "-p", default=".", help="Root directory of codebase.")
-def sync(path: str):
+@click.option("--obscure", is_flag=True, help="Obfuscate symbol names and path identifiers in generated context artifacts.")
+def sync(path: str, obscure: bool):
     """Incrementally scans workspace, updates context cache, changes, and connection graph."""
     config = Config(path)
-    sync_impl(config)
+    sync_impl(config, obscure=obscure)
 
-def sync_impl(config: Config):
+def sync_impl(config: Config, obscure: bool = False):
     tracker = ChangeTracker(config)
     extractor = SymbolExtractor()
     
@@ -270,6 +271,50 @@ def stats(path: str, target_file: Optional[str]):
         console.print(f"\n✨ [bold green]Saved ~{raw_tokens - scoped_tokens:,} actual tokens on this turn![/]\n")
     else:
         console.print(f"\n✨ [bold green]Saved ~{raw_tokens - summary_tokens:,} actual tokens per turn![/]\n")
+
+@cli.command()
+@click.option("--path", "-p", default=".", help="Root directory of codebase.")
+def audit(path: str):
+    """Runs a security audit checking multi-target ignore files, sensitive files, and pre-commit security gates."""
+    config = Config(path)
+    from .security import SecurityGuard
+    
+    updated = SecurityGuard.ensure_all_ignores_updated(config.root_dir)
+    results = SecurityGuard.audit(config.root_dir)
+    
+    console.print("\n[bold magenta]🛡️ AIContext Security & Anti-Leakage Audit[/]")
+    
+    if updated:
+        console.print(f"[bold green]Updated Ignore Files:[/] {', '.join(updated)}")
+    
+    console.print("\n[bold white]Multi-Target Ignore Protection Status:[/]")
+    for fname, status in results["ignore_files"].items():
+        if status == "SECURE":
+            color = "green"
+            icon = "✅"
+        elif status == "NOT_PRESENT":
+            color = "dim"
+            icon = "⚪"
+        else:
+            color = "yellow"
+            icon = "⚠️"
+        console.print(f"  {icon} [bold {color}]{fname}:[/] {status}")
+
+    gate_status = "✅ ACTIVE" if results["git_pre_commit_gate"] else "⚪ NOT INSTALLED (Run 'aicontext init')"
+    console.print(f"\n[bold white]Git Pre-Commit Security Gate:[/] {gate_status}")
+    console.print("\n[bold green]🔒 All secret redactions and sensitive file exclusions active.[/]\n")
+
+@cli.command()
+@click.option("--path", "-p", default=".", help="Root directory of codebase.")
+def purge(path: str):
+    """Securely purges all .aicontext artifacts, git hooks, and injected rules with zero trace."""
+    config = Config(path)
+    from .security import SecurityGuard
+    purged = SecurityGuard.purge_all(config.root_dir)
+    if purged:
+        console.print(f"[bold green]🔒 Zero-Trace Purge Complete![/] Sanitized: {', '.join(purged)}")
+    else:
+        console.print("[bold yellow]Workspace is already clean; no AIContext trace found.[/]")
 
 @cli.command()
 @click.option("--path", "-p", default=".", help="Root directory of codebase.")

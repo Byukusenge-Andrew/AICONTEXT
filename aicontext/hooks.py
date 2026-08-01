@@ -15,7 +15,8 @@ aicontext sync --path . >/dev/null 2>&1 &
 """
 
 PRE_COMMIT_HOOK = """#!/bin/sh
-# AIContext Git Pre-Commit Hook - Ensure changes and graph are updated before commit
+# AIContext Git Pre-Commit Security Gate - Prevents accidental context directory leakage
+git reset HEAD .aicontext/ >/dev/null 2>&1
 aicontext sync --path .
 """
 

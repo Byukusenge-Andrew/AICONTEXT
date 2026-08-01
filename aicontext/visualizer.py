@@ -296,8 +296,23 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     <script>
         let DATA = __DATA_JSON__;
         let graph3dInstance = null;
+        let mermaidRendered = false;
 
         mermaid.initialize({ startOnLoad: false, theme: 'dark' });
+
+        function renderMermaidGraph() {
+            if (mermaidRendered) return;
+            const mElem = document.getElementById('mermaid-graph');
+            if (!mElem || !DATA.mermaid) return;
+            mElem.textContent = DATA.mermaid;
+            try {
+                mermaid.run({ nodes: [mElem] }).then(() => {
+                    mermaidRendered = true;
+                }).catch(err => console.error("Mermaid error:", err));
+            } catch(e) {
+                console.error("Mermaid exception:", e);
+            }
+        }
 
         function init() {
             // Render Stats
@@ -306,10 +321,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
             // Render 3D Graph
             init3DGraph();
-
-            // Render 2D Mermaid Graph
-            document.getElementById('mermaid-graph').textContent = DATA.mermaid;
-            mermaid.run({ nodes: [document.getElementById('mermaid-graph')] });
 
             // Render Symbols
             const symContainer = document.getElementById('symbols-container');
@@ -379,6 +390,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             if (tab === '3dgraph' && graph3dInstance) {
                 const elem = document.getElementById('graph3d-container');
                 graph3dInstance.width(elem.clientWidth);
+            } else if (tab === 'graph') {
+                setTimeout(renderMermaidGraph, 50);
             }
         }
 

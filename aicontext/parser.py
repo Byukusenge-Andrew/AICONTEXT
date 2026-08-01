@@ -3,13 +3,15 @@ import re
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 
+from .security import SecurityGuard
+
 class SymbolInfo:
     def __init__(self, name: str, kind: str, line_no: int, details: str = "", docstring: str = ""):
         self.name = name
         self.kind = kind  # "class", "function", "variable", "interface", "method"
         self.line_no = line_no
-        self.details = details
-        self.docstring = docstring
+        self.details = SecurityGuard.redact_secrets(details)
+        self.docstring = SecurityGuard.redact_secrets(docstring)
 
     def to_dict(self) -> dict:
         return {

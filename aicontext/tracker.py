@@ -7,6 +7,7 @@ from typing import Dict, List, Set, Tuple, Optional
 import pathspec
 
 from .config import Config
+from .security import SecurityGuard
 
 class FileState:
     def __init__(self, rel_path: str, file_hash: str, mtime: float, size: int):
@@ -94,7 +95,7 @@ class ChangeTracker:
             except ValueError:
                 continue
 
-            if self.spec.match_file(rel_path):
+            if self.spec.match_file(rel_path) or SecurityGuard.is_sensitive_file(rel_path, custom_patterns=self.config.custom_sensitive_patterns):
                 continue
 
             # Skip large files (> 2MB)
