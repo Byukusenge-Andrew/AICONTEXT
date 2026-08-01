@@ -84,6 +84,11 @@ Add this single configuration to your global MCP settings (`mcpServers`):
   aicontext query --file <relative_path> --radius 2 --tier 2
   ```
 
+- **Measure Token Savings Stats**:
+  ```bash
+  aicontext stats [--file <relative_path>]
+  ```
+
 - **Open Interactive 3D WebGL Browser Visualizer**:
   ```bash
   aicontext visualize

@@ -1,6 +1,7 @@
 import time
 import sys
 from pathlib import Path
+from typing import Optional, List
 import click
 from rich.console import Console
 from rich.panel import Panel
@@ -202,6 +203,50 @@ def query(path: str, target_file: str, radius: int, tier: int):
     generator = ContextGenerator(config)
     payload = generator.generate_tiered_context([target_file], conn_graph, parse_results, radius=radius, tier=tier)
     console.print(payload)
+
+@cli.command()
+@click.option("--path", "-p", default=".", help="Root directory of codebase.")
+@click.option("--file", "-f", "target_file", default=None, help="Optional target file to measure scoped query savings.")
+def stats(path: str, target_file: Optional[str]):
+    """Calculates and displays token savings metrics comparing raw codebase vs AIContext payloads."""
+    config = Config(path)
+    tracker = ChangeTracker(config)
+    extractor = SymbolExtractor()
+    current_cache, _, _, _ = tracker.scan_files()
+    
+    total_raw_chars = 0
+    for rel_path, state in current_cache.items():
+        try:
+            full_path = config.root_dir / rel_path
+            total_raw_chars += len(full_path.read_text(encoding="utf-8", errors="ignore"))
+        except Exception:
+            total_raw_chars += state.size
+
+    raw_tokens = int(total_raw_chars / 4)
+    summary_text = config.summary_file.read_text(encoding="utf-8") if config.summary_file.exists() else ""
+    summary_tokens = int(len(summary_text) / 4)
+
+    scoped_tokens = None
+    if target_file and target_file in current_cache:
+        parse_results = {rel: extractor.parse_file(config.root_dir / rel, rel) for rel in current_cache}
+        conn_graph = ConnectionGraph(config.root_dir)
+        conn_graph.build_graph(parse_results)
+        generator = ContextGenerator(config)
+        payload = generator.generate_tiered_context([target_file], conn_graph, parse_results, radius=1, tier=2)
+        scoped_tokens = int(len(payload) / 4)
+
+    summary_savings = ((raw_tokens - summary_tokens) / max(raw_tokens, 1)) * 100
+    
+    console.print("\n[bold magenta]📊 AIContext Token Optimization Analysis[/]")
+    console.print(f"• [bold white]Raw Codebase (All Files):[/] ~{raw_tokens:,} tokens ({total_raw_chars:,} chars)")
+    console.print(f"• [bold cyan]AIContext Summary Map:[/]   ~{summary_tokens:,} tokens ([bold green]-{summary_savings:.1f}% savings[/])")
+    
+    if scoped_tokens is not None:
+        scoped_savings = ((raw_tokens - scoped_tokens) / max(raw_tokens, 1)) * 100
+        console.print(f"• [bold yellow]Scoped Query ({target_file}):[/] ~{scoped_tokens:,} tokens ([bold green]-{scoped_savings:.1f}% savings[/])")
+        console.print(f"\n✨ [bold green]Saved ~{raw_tokens - scoped_tokens:,} tokens on this turn![/]\n")
+    else:
+        console.print(f"\n✨ [bold green]Saved ~{raw_tokens - summary_tokens:,} tokens per turn![/]\n")
 
 @cli.command()
 @click.option("--path", "-p", default=".", help="Root directory of codebase.")
