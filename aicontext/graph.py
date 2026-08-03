@@ -1,3 +1,6 @@
+"""
+AIContext Connection Graph Engine - Manages workspace dependency graphs with O(1) HashMap module indexing and N-hop BFS radius traversal.
+"""
 import json
 from pathlib import Path
 from typing import Dict, List, Set, Tuple, Optional

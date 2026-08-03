@@ -1,3 +1,4 @@
+import json
 import os
 import tempfile
 from pathlib import Path
@@ -20,6 +21,7 @@ def test_config_initialization(tmp_path):
 
 def test_tracker_and_hash_caching(tmp_path):
     config = Config(tmp_path)
+    config.ensure_dir()
     file1 = tmp_path / "main.py"
     file1.write_text("def hello(): pass\n", encoding="utf-8")
 
@@ -46,7 +48,7 @@ def test_tracker_and_hash_caching(tmp_path):
 
 def test_symbol_extraction(tmp_path):
     py_file = tmp_path / "app.py"
-    py_file.write_text('''
+    py_file.write_text('''"""Module description explaining app functionality."""
 import os
 from pathlib import Path
 
@@ -64,6 +66,7 @@ def calculate_total(a: int, b: int) -> int:
     result = extractor.parse_file(py_file, "app.py")
 
     assert result.language == "python"
+    assert "Module description" in result.module_docstring
     assert "os" in result.imports
     assert "pathlib" in result.imports
     
@@ -225,6 +228,8 @@ def test_project_custom_config(tmp_path):
         "ignore_targets": [".customignore"],
         "custom_ignore_patterns": ["custom_build/"]
     }), encoding="utf-8")
+
+    (tmp_path / ".customignore").write_text("# Custom ignore file\n", encoding="utf-8")
 
     config = Config(tmp_path)
     config.ensure_dir()

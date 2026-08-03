@@ -1,3 +1,6 @@
+"""
+AIContext Incremental Change Tracker - Computes file SHA-256 hashes, detects workspace file deltas, and analyzes git repository status.
+"""
 import hashlib
 import json
 import os

@@ -1,3 +1,6 @@
+"""
+AIContext Command Line Interface - Handles user commands, workspace initialization, context syncing, token stats, visualization, and MCP server launch.
+"""
 import time
 import sys
 from pathlib import Path

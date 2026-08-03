@@ -1,3 +1,6 @@
+"""
+AIContext Security Guard - Manages multi-target ignore enforcement, AST secret redaction, identifier obfuscation, and zero-trace workspace purging.
+"""
 import hashlib
 import os
 import re
@@ -32,8 +35,8 @@ SENSITIVE_FILE_PATTERNS = [
 ]
 
 SECRET_REGEX_PATTERNS = [
-    (r"sk-[a-zA-Z0-9_\-]{20,}", "[REDACTED_API_KEY]"),
     (r"sk-proj-[a-zA-Z0-9_\-]{20,}", "[REDACTED_OPENAI_KEY]"),
+    (r"sk-[a-zA-Z0-9_\-]{20,}", "[REDACTED_API_KEY]"),
     (r"AKIA[0-9A-Z]{16}", "[REDACTED_AWS_KEY]"),
     (r"ghp_[a-zA-Z0-9]{36}", "[REDACTED_GITHUB_TOKEN]"),
     (r"gho_[a-zA-Z0-9]{36}", "[REDACTED_GITHUB_OAUTH]"),

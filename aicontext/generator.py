@@ -1,3 +1,6 @@
+"""
+AIContext Context Generator - Generates token-optimized summary maps, recent change logs, Mermaid graphs, and tiered context payloads.
+"""
 import json
 from pathlib import Path
 from typing import Dict, List
@@ -88,6 +91,8 @@ class ContextGenerator:
             tag = " [TARGET]" if is_target else " [NEIGHBOR]"
             
             lines.append(f"### `{rel_path}` ({lang}){tag}")
+            if res and res.module_docstring:
+                lines.append(f"> *File Description: {res.module_docstring}*")
             if res and res.symbols:
                 lines.append("**Symbols:**")
                 sym_limit = None if (tier == 3 and is_target) else 10
@@ -134,6 +139,8 @@ Do not re-read unchanged codebase files unless requested.
             lang = res.language if res else "file"
             
             lines.append(f"### `{rel_path}` ({lang}, {state.size} bytes)")
+            if res and res.module_docstring:
+                lines.append(f"> *Description: {res.module_docstring}*")
             
             if res and res.symbols:
                 lines.append("**Key Symbols:**")

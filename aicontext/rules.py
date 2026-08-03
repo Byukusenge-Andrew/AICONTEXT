@@ -1,3 +1,6 @@
+"""
+AIContext Rule Injector - Configures and appends AI context instruction rules into AGENTS.md and .cursorrules.
+"""
 from pathlib import Path
 from typing import List
 from .config import Config

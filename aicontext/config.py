@@ -1,3 +1,6 @@
+"""
+AIContext Configuration Manager - Manages project paths, ignore patterns, security rules, and per-project .aicontext.json config files.
+"""
 import json
 import os
 from pathlib import Path

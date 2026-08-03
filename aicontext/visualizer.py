@@ -1,3 +1,6 @@
+"""
+AIContext Interactive Visualizer - Builds interactive 3D WebGL Code Globe and 2D Mermaid diagram browser dashboards.
+"""
 import json
 import http.server
 import socketserver
@@ -345,6 +348,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
                 card.innerHTML = `
                     <div class="card-header">📄 ${path} <span style="font-size:12px;color:var(--text-muted);font-weight:400">(${fileData.language})</span></div>
+                    ${fileData.module_docstring ? `<div style="font-size:12px;color:var(--accent-cyan);margin-bottom:12px;font-style:italic;background:rgba(6,182,212,0.08);padding:6px 10px;border-radius:6px;">💡 ${fileData.module_docstring}</div>` : ''}
                     ${symHtml}
                 `;
                 symContainer.appendChild(card);
@@ -428,7 +432,10 @@ class Visualizer:
             parent_dir = Path(path).parent.as_posix()
             if parent_dir == ".":
                 parent_dir = "root"
-            nodes_3d.append({"id": path, "name": path, "group": parent_dir})
+            res = parse_results.get(path)
+            desc = res.module_docstring if (res and res.module_docstring) else ""
+            node_label = f"<div style='font-family:sans-serif;padding:4px 8px;background:rgba(15,23,42,0.9);border:1px solid #334155;border-radius:6px;'><b>{path}</b>{f'<br/><span style=\"font-size:11px;color:#06b6d4;\">💡 {desc}</span>' if desc else ''}</div>"
+            nodes_3d.append({"id": path, "name": node_label, "group": parent_dir})
 
         # Build edges from parse_results or mermaid data
         from .graph import ConnectionGraph

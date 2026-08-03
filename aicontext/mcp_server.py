@@ -1,3 +1,6 @@
+"""
+AIContext MCP Server - Exposes FastMCP server tools for seamless IDE context retrieval in Antigravity, Cursor, and Claude Code.
+"""
 import asyncio
 import json
 from pathlib import Path

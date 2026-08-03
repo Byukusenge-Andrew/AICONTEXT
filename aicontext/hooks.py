@@ -1,3 +1,6 @@
+"""
+AIContext Git Hooks Installer - Installs automated Git pre-commit, post-commit, and post-checkout hooks for background auto-syncing.
+"""
 import os
 import stat
 from pathlib import Path

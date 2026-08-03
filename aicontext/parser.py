@@ -1,3 +1,7 @@
+"""
+Multi-language AST Symbol Extractor, Universal Docstring Parser & Import Resolver for AIContext.
+Extracts top-level module explanations, JSDoc/Sphinx docstrings, functions, classes, and imports across all programming languages.
+"""
 import ast
 import re
 from pathlib import Path
@@ -26,6 +30,7 @@ class FileParseResult:
     def __init__(self, rel_path: str, language: str):
         self.rel_path = rel_path
         self.language = language
+        self.module_docstring: str = ""
         self.symbols: List[SymbolInfo] = []
         self.imports: List[str] = []  # imported module names or file targets
         self.exports: List[str] = []
@@ -34,6 +39,7 @@ class FileParseResult:
         return {
             "rel_path": self.rel_path,
             "language": self.language,
+            "module_docstring": self.module_docstring,
             "symbols": [s.to_dict() for s in self.symbols],
             "imports": self.imports,
             "exports": self.exports,
@@ -60,6 +66,13 @@ class SymbolExtractor:
             ".html": "html",
             ".json": "json",
             ".md": "markdown",
+            ".sh": "bash",
+            ".bash": "bash",
+            ".rb": "ruby",
+            ".php": "php",
+            ".kt": "kotlin",
+            ".swift": "swift",
+            ".cs": "csharp",
         }
         return mapping.get(ext, "unknown")
 
@@ -75,6 +88,9 @@ class SymbolExtractor:
         except Exception:
             return result
 
+        # Extract universal multi-language top-level file explanation
+        result.module_docstring = self._extract_universal_module_docstring(content, lang)
+
         if lang == "python":
             self._parse_python(content, result)
         elif lang in ["javascript", "typescript"]:
@@ -84,9 +100,83 @@ class SymbolExtractor:
 
         return result
 
+    def _extract_universal_module_docstring(self, content: str, lang: str) -> str:
+        """Extracts top-level file comments, JSDoc, docstrings, or headers across ANY programming language."""
+        if not content:
+            return ""
+
+        # 1. C-style block comments (JSDoc, C, C++, C#, Java, Go, Rust, TS, Swift, Kotlin, PHP, CSS)
+        c_block = re.match(r'^\s*/\*[\*\!](.*?)\*/', content, re.DOTALL)
+        if not c_block:
+            c_block = re.match(r'^\s*/\*(.*?)\*/', content, re.DOTALL)
+
+        if c_block:
+            raw_doc = re.sub(r'^\s*\*?\s?', '', c_block.group(1), flags=re.MULTILINE).strip()
+            if raw_doc:
+                return SecurityGuard.redact_secrets(raw_doc[:250])
+
+        # 2. Hash line-comments (Python, Shell/Bash, Ruby, YAML, TOML, Perl, Elixir, R)
+        lines = content.splitlines()
+        hash_comments = []
+        for line in lines:
+            l = line.strip()
+            if not l:
+                continue
+            if l.startswith("#") and not l.startswith("#!") and not l.startswith("# -*-"):
+                hash_comments.append(l.lstrip("#").strip())
+            elif hash_comments:
+                break
+            else:
+                break
+
+        if hash_comments:
+            raw_doc = " ".join(hash_comments).strip()
+            if raw_doc:
+                return SecurityGuard.redact_secrets(raw_doc[:250])
+
+        # 3. Double-slash continuous line comments (C++, C#, Java, Go, Rust, TS, Swift)
+        slash_comments = []
+        for line in lines:
+            l = line.strip()
+            if not l:
+                continue
+            if l.startswith("//") and not l.startswith("///"):
+                slash_comments.append(l.lstrip("/").strip())
+            elif slash_comments:
+                break
+            else:
+                break
+
+        if slash_comments:
+            raw_doc = " ".join(slash_comments).strip()
+            if raw_doc:
+                return SecurityGuard.redact_secrets(raw_doc[:250])
+
+        # 4. HTML / XML block comments
+        html_comment = re.match(r'^\s*<!--\s*(.*?)\s*-->', content, re.DOTALL)
+        if html_comment:
+            raw_doc = html_comment.group(1).strip()
+            if raw_doc:
+                return SecurityGuard.redact_secrets(raw_doc[:250])
+
+        # 5. Markdown top heading / overview
+        if lang == "markdown":
+            for line in lines:
+                l = line.strip()
+                if l.startswith(">"):
+                    return SecurityGuard.redact_secrets(l.lstrip(">").strip()[:250])
+                elif l.startswith("#") and len(l) > 1:
+                    return SecurityGuard.redact_secrets(l.lstrip("#").strip()[:250])
+
+        return ""
+
     def _parse_python(self, content: str, result: FileParseResult):
         try:
             tree = ast.parse(content)
+            mod_doc = ast.get_docstring(tree) or ""
+            if mod_doc:
+                result.module_docstring = SecurityGuard.redact_secrets(mod_doc.strip()[:250])
+
             for node in ast.walk(tree):
                 if isinstance(node, ast.Import):
                     for alias in node.names:
@@ -143,7 +233,6 @@ class SymbolExtractor:
                 result.symbols.append(SymbolInfo(fn_match.group(1), "function", idx))
 
     def _parse_generic(self, content: str, result: FileParseResult):
-        # Regex heuristics for generic functions/classes
         lines = content.splitlines()
         for idx, line in enumerate(lines, 1):
             line_str = line.strip()
